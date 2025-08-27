@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "slack-lists": {
+      "command": "python",
+      "args": ["/path/to/slack-lists-mcp-server/src/slack_lists_server.py"],
+      "env": {
+        "SLACK_BOT_TOKEN": "xoxb-your-bot-token-here"
+      }
+    }
+  }
+}
+
