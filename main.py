@@ -74,12 +74,82 @@ async def find_item_by_title(list_id: str, title: str):
     return None
 
 
+def extract_notion_property(data: dict, key: str):
+    """
+    Extract value from Notion property, handling all their complex structures.
+    
+    Notion properties have structure like:
+    - title: {"type": "title", "title": [{"plain_text": "..."}]}
+    - select: {"type": "select", "select": {"name": "..."}}
+    - rich_text: {"type": "rich_text", "rich_text": [{"plain_text": "..."}]}
+    - date: {"type": "date", "date": {"start": "..."}}
+    - multi_select: {"type": "multi_select", "multi_select": [{"name": "..."}]}
+    """
+    prop = data.get(key) or data.get(key.lower())
+    if not prop:
+        return None
+    
+    if not isinstance(prop, dict):
+        return prop
+    
+    prop_type = prop.get("type")
+    
+    # Title type - array of rich text objects
+    if prop_type == "title":
+        titles = prop.get("title", [])
+        if titles and len(titles) > 0:
+            return titles[0].get("plain_text") or titles[0].get("text", {}).get("content")
+        return None
+    
+    # Select type - single object with name
+    if prop_type == "select":
+        select_val = prop.get("select")
+        if select_val:
+            return select_val.get("name")
+        return None
+    
+    # Rich text type - array of text objects
+    if prop_type == "rich_text":
+        texts = prop.get("rich_text", [])
+        if texts and len(texts) > 0:
+            return texts[0].get("plain_text") or texts[0].get("text", {}).get("content")
+        return None
+    
+    # Multi-select - array of objects with names
+    if prop_type == "multi_select":
+        items = prop.get("multi_select", [])
+        return [item.get("name") for item in items if item.get("name")]
+    
+    # Date type
+    if prop_type == "date":
+        date_val = prop.get("date")
+        if date_val:
+            return date_val.get("start")
+        return None
+    
+    # Fallback for simpler structures
+    return prop.get("name") or prop.get("value") or prop.get("plain_text")
+
+
+def get_notion_properties(body: dict) -> dict:
+    """Get the properties dict from Notion webhook, handling nesting"""
+    # Notion may nest data in 'data' or directly have 'properties'
+    data = body.get("data", body)
+    if "properties" in data:
+        return data["properties"]
+    if "properties" in body:
+        return body["properties"]
+    return data
+
+
 def build_cells_from_notion(body: dict) -> list:
     """Build Slack List cells from Notion webhook payload"""
     cells = []
     
+    props = get_notion_properties(body)
+    
     # Status
-    status = body.get("Status") or body.get("status")
+    status = extract_notion_property(props, "Status")
     if status and status in STATUS_MAPPING:
         cells.append({
             "column_id": COLUMNS["status"],
@@ -87,7 +157,7 @@ def build_cells_from_notion(body: dict) -> list:
         })
     
     # Description/Details
-    details = body.get("Details") or body.get("details")
+    details = extract_notion_property(props, "Details")
     if details:
         cells.append({
             "column_id": COLUMNS["description"],
@@ -101,7 +171,7 @@ def build_cells_from_notion(body: dict) -> list:
         })
     
     # Priority
-    priority = body.get("Priority") or body.get("priority")
+    priority = extract_notion_property(props, "Priority")
     if priority and priority in PRIORITY_MAPPING:
         cells.append({
             "column_id": COLUMNS["priority"],
@@ -123,8 +193,18 @@ async def notion_webhook(request: Request):
         body = await request.json()
         print(f"Received Notion webhook: {json.dumps(body, indent=2)}")
         
-        # Extract title (required to find/create item)
-        title = body.get("Request") or body.get("title") or body.get("name")
+        # Get properties from Notion payload
+        props = get_notion_properties(body)
+        
+        # Try multiple possible field names for title (Request is your DB's title field)
+        title = (
+            extract_notion_property(props, "Request") or
+            extract_notion_property(props, "Title") or
+            extract_notion_property(props, "Name") or
+            extract_notion_property(props, "title") or
+            extract_notion_property(props, "name")
+        )
+        
         list_id = body.get("list_id", DEFAULT_LIST_ID)
         
         if not title:
@@ -163,12 +243,12 @@ async def notion_webhook(request: Request):
             fields = [create_text_field(COLUMNS["title"], title)]
             
             # Add status if provided
-            status = body.get("Status") or body.get("status")
+            status = extract_notion_property(props, "Status")
             if status and status in STATUS_MAPPING:
                 fields.append(create_select_field(COLUMNS["status"], [STATUS_MAPPING[status]]))
             
             # Add details if provided
-            details = body.get("Details") or body.get("details")
+            details = extract_notion_property(props, "Details")
             if details:
                 fields.append(create_text_field(COLUMNS["description"], str(details)))
             
