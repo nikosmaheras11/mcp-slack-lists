@@ -136,12 +136,23 @@ class SlackListsClient:
         return all_items
 
     async def update_list_item(self, list_id: str, item_id: str, 
-                              fields: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Update an existing item in a Slack List"""
+                              cells: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Update an existing item in a Slack List
+        
+        Args:
+            list_id: The List ID
+            item_id: The item/row ID to update
+            cells: List of cell objects, each containing column_id, row_id, and the field value
+        """
+        # Each cell must include both column_id and row_id
+        formatted_cells = []
+        for cell in cells:
+            cell_with_row = {**cell, "row_id": item_id}
+            formatted_cells.append(cell_with_row)
+        
         payload = {
             "list_id": list_id,
-            "item_id": item_id,
-            "fields": fields
+            "cells": formatted_cells
         }
         
         return await self._make_request("POST", "slackLists.items.update", json=payload)
@@ -778,8 +789,9 @@ async def update_list_item(
         except json.JSONDecodeError as e:
             return f"❌ Invalid JSON in fields parameter: {str(e)}"
         
-        # Build field payloads
-        formatted_fields = []
+        # Build cells for update API (different format than create)
+        # Each cell needs: column_id + the field type with value
+        cells = []
         for field in field_updates:
             column_id = field.get("column_id")
             field_type = field.get("type", "text")
@@ -788,33 +800,61 @@ async def update_list_item(
             if not column_id:
                 continue
             
+            cell = {"column_id": column_id}
+            
             if field_type == "text":
-                formatted_fields.append(create_text_field(column_id, str(value)))
+                # Text fields require rich_text format
+                cell["rich_text"] = [{
+                    "type": "rich_text",
+                    "elements": [{
+                        "type": "rich_text_section",
+                        "elements": [{
+                            "type": "text",
+                            "text": str(value)
+                        }]
+                    }]
+                }]
             elif field_type == "number":
-                formatted_fields.append({"column_id": column_id, "number": value})
+                cell["number"] = [value] if not isinstance(value, list) else value
             elif field_type == "date":
-                formatted_fields.append(create_date_field(column_id, value))
+                cell["date"] = [value] if not isinstance(value, list) else value
             elif field_type == "select":
                 options = value if isinstance(value, list) else [value]
-                formatted_fields.append(create_select_field(column_id, options))
+                cell["select"] = options
             elif field_type == "user":
                 users = value if isinstance(value, list) else [value]
-                formatted_fields.append(create_user_field(column_id, users))
+                cell["user"] = users
             elif field_type == "checkbox":
-                formatted_fields.append(create_checkbox_field(column_id, bool(value)))
+                cell["checkbox"] = bool(value)
+            elif field_type == "email":
+                cell["email"] = [value] if not isinstance(value, list) else value
+            elif field_type == "phone":
+                cell["phone"] = [value] if not isinstance(value, list) else value
             else:
-                formatted_fields.append(create_text_field(column_id, str(value)))
+                # Default to text
+                cell["rich_text"] = [{
+                    "type": "rich_text",
+                    "elements": [{
+                        "type": "rich_text_section",
+                        "elements": [{
+                            "type": "text",
+                            "text": str(value)
+                        }]
+                    }]
+                }]
+            
+            cells.append(cell)
         
-        if not formatted_fields:
+        if not cells:
             return "❌ No valid fields to update"
         
         # Make the update request
-        result = await client.update_list_item(list_id, item_id, formatted_fields)
+        result = await client.update_list_item(list_id, item_id, cells)
         
         return f"✅ Successfully updated list item!\n" \
                f"Item ID: {item_id}\n" \
                f"List ID: {list_id}\n" \
-               f"Fields updated: {len(formatted_fields)}"
+               f"Fields updated: {len(cells)}"
         
     except SlackListsError as e:
         return f"❌ Slack Lists error: {str(e)}"
