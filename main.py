@@ -108,6 +108,13 @@ def extract_notion_property(data: dict, key: str):
             return select_val.get("name")
         return None
     
+    # Status type (Notion's special status property, similar to select)
+    if prop_type == "status":
+        status_val = prop.get("status")
+        if status_val:
+            return status_val.get("name")
+        return None
+    
     # Rich text type - array of text objects
     if prop_type == "rich_text":
         texts = prop.get("rich_text", [])
