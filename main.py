@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Main entry point for Railway deployment
+Uses uvicorn to run the SSE app for remote MCP connections
 """
 
 import os
@@ -12,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from dotenv import load_dotenv
 load_dotenv()
 
+import uvicorn
 from slack_lists_server import mcp
 
 if __name__ == "__main__":
@@ -19,4 +21,8 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
 
     print(f"Starting Slack Lists MCP Server on {host}:{port}")
-    mcp.run(transport="sse", host=host, port=port)
+    print("Available tools: create_list_item, create_multiple_list_items, get_list_items, filter_list_items, export_list_items")
+
+    # Get the SSE app and run it with uvicorn
+    app = mcp.sse_app()
+    uvicorn.run(app, host=host, port=port)
