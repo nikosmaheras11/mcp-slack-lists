@@ -229,7 +229,10 @@ async def notion_webhook(request: Request):
             # UPDATE existing item
             item_id = item.get("id")
             cells = build_cells_from_notion(body)
-            
+
+            print(f"DEBUG: Built cells for update: {json.dumps(cells, indent=2)}")
+            print(f"DEBUG: Item ID: {item_id}, List ID: {list_id}")
+
             if cells:
                 await client.update_list_item(list_id, item_id, cells)
                 print(f"✅ Updated '{title}' with {len(cells)} field(s)")

@@ -88,7 +88,9 @@ class SlackListsClient:
                 data = response.json()
                 
                 if not data.get("ok"):
-                    raise SlackListsError(f"Slack API error: {data.get('error', 'Unknown error')}")
+                    # Log full response for debugging
+                    logger.error(f"Slack API error response: {json.dumps(data, indent=2)}")
+                    raise SlackListsError(f"Slack API error: {data.get('error', 'Unknown error')} - details: {data}")
                 
                 return data
                 
@@ -135,10 +137,10 @@ class SlackListsClient:
         
         return all_items
 
-    async def update_list_item(self, list_id: str, item_id: str, 
+    async def update_list_item(self, list_id: str, item_id: str,
                               cells: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Update an existing item in a Slack List
-        
+
         Args:
             list_id: The List ID
             item_id: The item/row ID to update
@@ -149,12 +151,14 @@ class SlackListsClient:
         for cell in cells:
             cell_with_row = {**cell, "row_id": item_id}
             formatted_cells.append(cell_with_row)
-        
+
         payload = {
             "list_id": list_id,
             "cells": formatted_cells
         }
-        
+
+        logger.info(f"DEBUG update_list_item payload: {json.dumps(payload, indent=2)}")
+
         return await self._make_request("POST", "slackLists.items.update", json=payload)
 
 # Global client instance (will be initialized with token)
