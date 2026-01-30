@@ -113,11 +113,11 @@ class SlackListsClient:
     async def get_list_items(self, list_id: str, limit: int = 100, 
                            cursor: Optional[str] = None) -> Dict[str, Any]:
         """Get items from a Slack List with pagination"""
-        params = {"list_id": list_id, "limit": limit}
+        payload = {"list_id": list_id, "limit": limit}
         if cursor:
-            params["cursor"] = cursor
+            payload["cursor"] = cursor
         
-        return await self._make_request("GET", "slackLists.items.list", params=params)
+        return await self._make_request("POST", "slackLists.items.list", json=payload)
     
     async def get_all_list_items(self, list_id: str) -> List[Dict[str, Any]]:
         """Get all items from a Slack List (handles pagination)"""
