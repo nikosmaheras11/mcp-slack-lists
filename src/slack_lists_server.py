@@ -28,6 +28,15 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.types import TextContent
 
+# Try to import TransportSecuritySettings for disabling DNS rebinding protection
+try:
+    from mcp.server.transport_security import TransportSecuritySettings
+    SECURITY_SETTINGS = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
+except ImportError:
+    SECURITY_SETTINGS = None
+
 # Configure logging to stderr (never stdout for MCP servers)
 logging.basicConfig(
     level=logging.INFO,
@@ -36,8 +45,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP server
-mcp = FastMCP("slack-lists")
+# Initialize FastMCP server with security settings for remote deployment
+if SECURITY_SETTINGS:
+    mcp = FastMCP("slack-lists", transport_security=SECURITY_SETTINGS)
+else:
+    mcp = FastMCP("slack-lists")
 
 # Slack API configuration
 SLACK_API_BASE = "https://slack.com/api"
