@@ -1,3 +1,4 @@
+cd ~/mcp-slack-lists && git add . && git commit -m "Add update_list_item tool" && git push
 #!/usr/bin/env python3
 """
 Slack Lists MCP Server
@@ -134,17 +135,6 @@ class SlackListsClient:
                 break
         
         return all_items
-
-    async def update_list_item(self, list_id: str, item_id: str, 
-                              fields: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Update an existing item in a Slack List"""
-        payload = {
-            "list_id": list_id,
-            "item_id": item_id,
-            "fields": fields
-        }
-        
-        return await self._make_request("POST", "slackLists.items.update", json=payload)
 
 # Global client instance (will be initialized with token)
 slack_client: Optional[SlackListsClient] = None
@@ -748,81 +738,6 @@ async def export_list_items(
         logger.error(f"Unexpected error in export_list_items: {str(e)}")
         return f"❌ Unexpected error: {str(e)}"
 
-@mcp.tool()
-async def update_list_item(
-    list_id: str,
-    item_id: str,
-    fields: str
-) -> str:
-    """
-    Update an existing item in a Slack List.
-    
-    Args:
-        list_id: The ID of the Slack List (format: F1234ABCD)
-        item_id: The ID of the item to update (format: Rec1234ABCD)
-        fields: JSON string of fields to update in format:
-                [{"column_id": "Col123", "type": "text", "value": "new value"},
-                 {"column_id": "Col456", "type": "select", "value": ["OptABC123"]}]
-                
-                Supported types: text, number, date, select, user, checkbox
-    
-    Returns:
-        Success message with updated item details
-    """
-    try:
-        client = get_slack_client()
-        
-        # Parse fields JSON
-        try:
-            field_updates = json.loads(fields) if isinstance(fields, str) else fields
-        except json.JSONDecodeError as e:
-            return f"❌ Invalid JSON in fields parameter: {str(e)}"
-        
-        # Build field payloads
-        formatted_fields = []
-        for field in field_updates:
-            column_id = field.get("column_id")
-            field_type = field.get("type", "text")
-            value = field.get("value")
-            
-            if not column_id:
-                continue
-            
-            if field_type == "text":
-                formatted_fields.append(create_text_field(column_id, str(value)))
-            elif field_type == "number":
-                formatted_fields.append({"column_id": column_id, "number": value})
-            elif field_type == "date":
-                formatted_fields.append(create_date_field(column_id, value))
-            elif field_type == "select":
-                options = value if isinstance(value, list) else [value]
-                formatted_fields.append(create_select_field(column_id, options))
-            elif field_type == "user":
-                users = value if isinstance(value, list) else [value]
-                formatted_fields.append(create_user_field(column_id, users))
-            elif field_type == "checkbox":
-                formatted_fields.append(create_checkbox_field(column_id, bool(value)))
-            else:
-                formatted_fields.append(create_text_field(column_id, str(value)))
-        
-        if not formatted_fields:
-            return "❌ No valid fields to update"
-        
-        # Make the update request
-        result = await client.update_list_item(list_id, item_id, formatted_fields)
-        
-        return f"✅ Successfully updated list item!\n" \
-               f"Item ID: {item_id}\n" \
-               f"List ID: {list_id}\n" \
-               f"Fields updated: {len(formatted_fields)}"
-        
-    except SlackListsError as e:
-        return f"❌ Slack Lists error: {str(e)}"
-    except Exception as e:
-        logger.error(f"Unexpected error in update_list_item: {str(e)}")
-        return f"❌ Unexpected error: {str(e)}"
-
-
 # Server startup and configuration
 if __name__ == "__main__":
     # Validate environment
@@ -832,7 +747,7 @@ if __name__ == "__main__":
         exit(1)
     
     logger.info("Starting Slack Lists MCP Server...")
-    logger.info("Available tools: create_list_item, create_multiple_list_items, get_list_items, filter_list_items, export_list_items, update_list_item")
+    logger.info("Available tools: create_list_item, create_multiple_list_items, get_list_items, filter_list_items, export_list_items")
     
     # Run the MCP server
     mcp.run(transport="stdio")
