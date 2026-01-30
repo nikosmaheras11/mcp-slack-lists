@@ -150,41 +150,25 @@ def get_notion_properties(body: dict) -> dict:
 
 
 def build_cells_from_notion(body: dict) -> list:
-    """Build Slack List cells from Notion webhook payload"""
+    """Build Slack List cells from Notion webhook payload
+
+    For now, only syncing Status field to avoid format issues with other field types.
+    """
     cells = []
-    
+
     props = get_notion_properties(body)
-    
-    # Status
+
+    # Status - this is the main field we want to sync
     status = extract_notion_property(props, "Status")
     if status and status in STATUS_MAPPING:
         cells.append({
             "column_id": COLUMNS["status"],
             "select": [STATUS_MAPPING[status]]
         })
-    
-    # Description/Details
-    details = extract_notion_property(props, "Details")
-    if details:
-        cells.append({
-            "column_id": COLUMNS["description"],
-            "rich_text": [{
-                "type": "rich_text",
-                "elements": [{
-                    "type": "rich_text_section",
-                    "elements": [{"type": "text", "text": str(details)}]
-                }]
-            }]
-        })
-    
-    # Priority
-    priority = extract_notion_property(props, "Priority")
-    if priority and priority in PRIORITY_MAPPING:
-        cells.append({
-            "column_id": COLUMNS["priority"],
-            "number": [PRIORITY_MAPPING[priority]]
-        })
-    
+
+    # Note: Description and Priority syncing disabled for now due to format issues
+    # TODO: Re-enable once we verify the correct field formats for Slack Lists
+
     return cells
 
 
